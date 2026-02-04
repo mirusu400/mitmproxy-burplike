@@ -77,19 +77,19 @@ function getCookie(name) {
     return r ? r[1] : undefined;
 }
 
-let xsrf = () => {
-    const cached = getCookie("_xsrf");
-    xsrf = () => cached;
-    return xsrf();
-};
+// Always read the latest _xsrf cookie to avoid caching an empty value
+const xsrf = () => getCookie("_xsrf");
 
 export function fetchApi(
     url: string,
     options: RequestInit = {},
 ): Promise<Response> {
     if (options.method && options.method !== "GET") {
-        options.headers = options.headers || {};
-        options.headers["X-XSRFToken"] = xsrf();
+        const token = xsrf();
+        if (token) {
+            options.headers = options.headers || {};
+            options.headers["X-XSRFToken"] = token;
+        }
     }
     if (url.startsWith("/")) {
         url = "." + url;
@@ -125,14 +125,33 @@ export async function runCommand(
     command: string,
     ...args: string[]
 ): Promise<any> {
-    const response = await fetchApi(`/commands/${command}`, {
+    let url = `/commands/${command}`;
+    const token = xsrf();
+    if (token) {
+        url += `?_xsrf=${encodeURIComponent(token)}`;
+    }
+    const payload: any = { arguments: args };
+    if (token) {
+        payload._xsrf = token;
+    }
+    console.log("[runCommand] url", url, "payload", payload);
+    const response = await fetchApi(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({ arguments: args }),
+        body: JSON.stringify(payload),
     });
-    return await response.json();
+    console.log("[runCommand] status", response.status, response.statusText);
+    let json;
+    try {
+        json = await response.json();
+    } catch (err) {
+        console.error("[runCommand] json parse error", err);
+        throw err;
+    }
+    console.log("[runCommand] response", json);
+    return json;
 }
 
 // deep comparison of two json objects (dicts). arrays are handeled as a single value.

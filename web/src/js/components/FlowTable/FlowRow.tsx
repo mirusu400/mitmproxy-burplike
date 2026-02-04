@@ -1,9 +1,12 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import classnames from "classnames";
 import type { Flow } from "../../flow";
 import { useAppDispatch, useAppSelector } from "../../ducks";
 import { select, selectRange, selectToggle } from "../../ducks/flows";
 import * as columns from "./FlowColumns";
+import ContextMenu from "../common/ContextMenu";
+import { copy } from "../../flow/export";
+import { sendToRepeater } from "../../ducks/ui/repeater";
 
 type FlowRowProps = {
     flow: Flow;
@@ -48,16 +51,65 @@ export default React.memo(function FlowRow({
         [flow],
     );
 
+    const [menuPos, setMenuPos] = useState<{ x: number; y: number }>();
+    const isHttp = flow.type === "http";
+    const menuItems = [
+        {
+            label: "Copy raw request",
+            onClick: () => copy(flow, "raw_request"),
+            disabled: !isHttp,
+        },
+        {
+            label: "Copy as Python requests",
+            onClick: () => copy(flow, "python_requests"),
+            disabled: !isHttp,
+        },
+        {
+            label: "Send to Repeater",
+            onClick: () => {
+                console.log("[FlowRow] send to repeater", flow.id);
+                return dispatch(sendToRepeater(flow));
+            },
+            disabled: !isHttp,
+        },
+    ];
+
     const displayColumns = displayColumnNames
         .map((x) => columns[x])
         .filter((x) => x)
         .concat(columns.quickactions);
 
     return (
-        <tr className={className} onClick={onClick}>
-            {displayColumns.map((Column) => (
-                <Column key={Column.name} flow={flow} />
-            ))}
-        </tr>
+        <>
+            <tr
+                className={className}
+                onClick={onClick}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    console.log("[FlowRow] contextmenu", {
+                        x: e.clientX,
+                        y: e.clientY,
+                        flow: flow.id,
+                    });
+                    setMenuPos({ x: e.clientX, y: e.clientY });
+                    dispatch(select([flow]));
+                }}
+            >
+                {displayColumns.map((Column) => (
+                    <Column key={Column.name} flow={flow} />
+                ))}
+            </tr>
+            {menuPos && (
+                <ContextMenu
+                    x={menuPos.x}
+                    y={menuPos.y}
+                    items={menuItems}
+                    onClose={() => {
+                        console.log("[FlowRow] contextmenu close", flow.id);
+                        setMenuPos(undefined);
+                    }}
+                />
+            )}
+        </>
     );
 });

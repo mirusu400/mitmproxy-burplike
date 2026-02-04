@@ -45,6 +45,7 @@ export interface FlowsState {
     byId: Map<string, Flow>;
     view: Flow[];
     _viewIndex: Map<string, number>;
+    filters: Record<FilterName, Set<string> | null>;
 
     sort: { column?: keyof typeof sortFunctions; desc: boolean };
     selected: Flow[];
@@ -58,6 +59,11 @@ export const defaultState: FlowsState = {
     byId: new Map(),
     view: [],
     _viewIndex: new Map(),
+    filters: {
+        [FilterName.Search]: null,
+        [FilterName.Highlight]: null,
+        [FilterName.Hostname]: null,
+    },
 
     sort: { column: undefined, desc: false },
     selected: [],
@@ -96,6 +102,7 @@ export default function flowsReducer(
             byId,
             view,
             _viewIndex,
+            filters: state.filters,
             sort,
             selected,
             selectedIds,
@@ -115,10 +122,7 @@ export default function flowsReducer(
         const byId = new Map(state.byId);
         byId.set(flow.id, flow);
         // Update view if filter matches (true) or is unset (undefined).
-        if (
-            matching_filters[FilterName.Search] === true ||
-            matching_filters[FilterName.Search] === undefined
-        ) {
+        if (matchesViewFilters(matching_filters)) {
             ({ view, _viewIndex } = insertViewItem(
                 view,
                 _viewIndex,
@@ -138,6 +142,7 @@ export default function flowsReducer(
             byId,
             view,
             _viewIndex,
+            filters: state.filters,
             sort,
             selected,
             selectedIds,
@@ -162,9 +167,7 @@ export default function flowsReducer(
         // Update view
         const prevViewPos: number | undefined = _viewIndex.get(flow.id);
         const hasOldFlow = prevViewPos !== undefined;
-        const hasNewFlow =
-            matching_filters[FilterName.Search] === true ||
-            matching_filters[FilterName.Search] === undefined;
+        const hasNewFlow = matchesViewFilters(matching_filters);
         if (hasNewFlow && !hasOldFlow) {
             ({ view, _viewIndex } = insertViewItem(
                 view,
@@ -208,6 +211,7 @@ export default function flowsReducer(
             byId,
             view,
             _viewIndex,
+            filters: state.filters,
             sort,
             selected,
             selectedIds,
@@ -255,6 +259,7 @@ export default function flowsReducer(
             byId,
             view,
             _viewIndex,
+            filters: state.filters,
             sort,
             selected,
             selectedIds,
@@ -262,20 +267,27 @@ export default function flowsReducer(
         };
     } else if (FLOWS_FILTER_UPDATE.match(action)) {
         const { name, matching_flow_ids } = action.payload;
+        const nextFilters = {
+            ...state.filters,
+            [name]:
+                matching_flow_ids === null
+                    ? null
+                    : new Set(matching_flow_ids),
+        };
+
         switch (name) {
-            case FilterName.Search: {
+            case FilterName.Search:
+            case FilterName.Hostname: {
                 const view = toSorted(
-                    matching_flow_ids === null
-                        ? state.list
-                        : matching_flow_ids
-                              .map((id) => state.byId.get(id))
-                              // WebSocket/HTTP race
-                              .filter((f) => f !== undefined),
+                    state.list.filter((flow) =>
+                        matchesViewForId(nextFilters, flow.id),
+                    ),
                     makeSort(state.sort),
                 );
                 const _viewIndex = buildIndex(view);
                 return {
                     ...state,
+                    filters: nextFilters,
                     view,
                     _viewIndex,
                 };
@@ -283,6 +295,7 @@ export default function flowsReducer(
             case FilterName.Highlight:
                 return {
                     ...state,
+                    filters: nextFilters,
                     highlightedIds: new Set(matching_flow_ids),
                 };
             /* istanbul ignore next @preserve */
@@ -314,6 +327,24 @@ export default function flowsReducer(
     } else {
         return state;
     }
+}
+
+const viewFilterNames = [FilterName.Search, FilterName.Hostname];
+
+function matchesViewFilters(
+    matching: Partial<{ [key in FilterName]: boolean }>,
+): boolean {
+    return viewFilterNames.every((name) => matching[name] !== false);
+}
+
+function matchesViewForId(
+    filters: Record<FilterName, Set<string> | null>,
+    flowId: string,
+): boolean {
+    return viewFilterNames.every((name) => {
+        const set = filters[name];
+        return set === null || set.has(flowId);
+    });
 }
 
 export function makeSort({

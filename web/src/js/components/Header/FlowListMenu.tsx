@@ -4,7 +4,13 @@ import * as flowsActions from "../../ducks/flows";
 import Button from "../common/Button";
 import { update as updateOptions } from "../../ducks/options";
 import { useAppDispatch, useAppSelector } from "../../ducks";
-import { FilterName, setFilter, setHighlight } from "../../ducks/ui/filter";
+import {
+    FilterName,
+    setFilter,
+    setHighlight,
+    setHostname,
+} from "../../ducks/ui/filter";
+import Filt from "../../filt/filt";
 
 FlowListMenu.title = "Flow List";
 
@@ -14,6 +20,7 @@ export default function FlowListMenu() {
             <div className="menu-group">
                 <div className="menu-content">
                     <FlowFilterInput />
+                    <HostnameFilterInput />
                     <HighlightInput />
                 </div>
                 <div className="menu-legend">Find</div>
@@ -55,6 +62,53 @@ function FlowFilterInput() {
             color="black"
             onChange={(expr) => dispatch(setFilter(expr))}
         />
+    );
+}
+
+function HostnameFilterInput() {
+    const dispatch = useAppDispatch();
+    const expr = useAppSelector(
+        (state) => state.ui.filter[FilterName.Hostname],
+    );
+    const storedValue = expr.startsWith("~d ") ? expr.slice(3) : expr;
+    const [value, setValue] = React.useState(storedValue);
+    React.useEffect(() => {
+        setValue(storedValue);
+    }, [storedValue]);
+
+    const isValid = (input: string) => {
+        if (!input) return true;
+        try {
+            Filt.parse(`~d ${input}`);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+    return (
+        <div
+            className={`filter-input input-group${
+                isValid(value) ? "" : " has-error"
+            }`}
+        >
+            <span className="input-group-addon">
+                <i className="fa fa-fw fa-globe" style={{ color: "black" }} />
+            </span>
+            <input
+                type="text"
+                placeholder="Scope (hostname)"
+                className="form-control"
+                value={value}
+                onChange={(e) => {
+                    const next = e.target.value;
+                    setValue(next);
+                    if (isValid(next)) {
+                        const expr = next ? `~d ${next}` : "";
+                        dispatch(setHostname(expr));
+                    }
+                }}
+            />
+        </div>
     );
 }
 

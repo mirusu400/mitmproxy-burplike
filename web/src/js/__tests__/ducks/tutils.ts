@@ -78,6 +78,11 @@ export const testState: RootState = {
         filter: {
             [FilterName.Search]: "~u /second | ~tcp | ~dns | ~udp",
             [FilterName.Highlight]: "~u /path",
+            [FilterName.Hostname]: "",
+        },
+        repeater: {
+            items: [],
+            selectedId: null,
         },
     },
     options: defaultOptions,
@@ -111,6 +116,11 @@ export const testState: RootState = {
             [tflow4.id, 3],
         ]),
         highlightedIds: new Set([tflow1.id]),
+        filters: {
+            [FilterName.Search]: null,
+            [FilterName.Highlight]: null,
+            [FilterName.Hostname]: null,
+        },
     },
     connection: {
         state: ConnectionState.ESTABLISHED,

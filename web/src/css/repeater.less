@@ -1,0 +1,87 @@
+.repeater-view {
+    display: flex;
+    height: 100%;
+}
+
+.repeater-list {
+    width: 30%;
+    min-width: 220px;
+    border-right: 1px solid #e5e5e5;
+    background: #f7f7f7;
+    display: flex;
+    flex-direction: column;
+
+    header {
+        padding: 8px 10px;
+        font-weight: bold;
+        border-bottom: 1px solid #e5e5e5;
+        background: #f2f2f2;
+    }
+
+    ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+    }
+
+    li.active {
+        background: #e6f2ff;
+    }
+
+    li.empty {
+        color: #666;
+        font-style: italic;
+    }
+
+    li > button {
+        background: transparent;
+        border: none;
+        text-align: left;
+        flex: 1;
+        padding: 0;
+    }
+}
+
+.repeater-detail {
+    flex: 1;
+    padding: 10px 12px;
+
+    .codeeditor {
+        height: 320px;
+    }
+
+    .repeater-response {
+        margin-top: 12px;
+    }
+}
+
+.repeater-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+
+    h4 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: bold;
+        flex: 1;
+    }
+}
+
+.repeater-error {
+    color: #b94a48;
+    padding: 8px;
+    background: #f2dede;
+    border: 1px solid #eed3d7;
+}

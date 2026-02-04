@@ -5,7 +5,12 @@
  * - read the initial URL state on page load
  * - push updates to the URL later on.
  */
-import { FilterName, setFilter, setHighlight } from "./ducks/ui/filter";
+import {
+    FilterName,
+    setFilter,
+    setHighlight,
+    setHostname,
+} from "./ducks/ui/filter";
 import { select } from "./ducks/flows";
 import { selectTab } from "./ducks/ui/flow";
 import * as eventLogActions from "./ducks/eventLog";
@@ -16,6 +21,7 @@ import { Tab, setCurrent } from "./ducks/ui/tabs";
 const Query = {
     SEARCH: "s",
     HIGHLIGHT: "h",
+    HOSTNAME: "d",
     SHOW_EVENTLOG: "e",
     SHOW_COMMANDBAR: "c",
 };
@@ -41,6 +47,8 @@ export function updateStoreFromUrl(store: RootStore) {
         }
     } else if (path_components[0] === "capture") {
         store.dispatch(setCurrent(Tab.Capture));
+    } else if (path_components[0] === "repeater") {
+        store.dispatch(setCurrent(Tab.Repeater));
     }
 
     if (query) {
@@ -53,6 +61,9 @@ export function updateStoreFromUrl(store: RootStore) {
                     break;
                 case Query.HIGHLIGHT:
                     store.dispatch(setHighlight(value));
+                    break;
+                case Query.HOSTNAME:
+                    store.dispatch(setHostname(value));
                     break;
                 case Query.SHOW_EVENTLOG:
                     if (!store.getState().eventLog.visible)
@@ -74,6 +85,7 @@ export function updateUrlFromStore(store: RootStore) {
     const query = {
         [Query.SEARCH]: state.ui.filter[FilterName.Search],
         [Query.HIGHLIGHT]: state.ui.filter[FilterName.Highlight],
+        [Query.HOSTNAME]: state.ui.filter[FilterName.Hostname],
         [Query.SHOW_EVENTLOG]: state.eventLog.visible,
         [Query.SHOW_COMMANDBAR]: state.commandBar.visible,
     };
@@ -85,6 +97,8 @@ export function updateUrlFromStore(store: RootStore) {
     let url;
     if (state.ui.tabs.current === Tab.Capture) {
         url = "/capture";
+    } else if (state.ui.tabs.current === Tab.Repeater) {
+        url = "/repeater";
     } else if (state.flows.selected.length > 0) {
         url = `/flows/${state.flows.selected[0].id}/${state.ui.flow.tab}`;
     } else {

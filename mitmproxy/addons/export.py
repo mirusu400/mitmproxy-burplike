@@ -12,6 +12,7 @@ from mitmproxy import exceptions
 from mitmproxy import flow
 from mitmproxy import http
 from mitmproxy.net.http.http1 import assemble
+from mitmproxy.net.http import url as http_url
 from mitmproxy.utils import strutils
 
 
@@ -21,7 +22,57 @@ def cleanup_request(f: flow.Flow) -> http.Request:
     assert isinstance(f, http.HTTPFlow)
     request = f.request.copy()
     request.decode(strict=False)
+    _normalize_request_target(request)
     return request
+
+
+def _normalize_request_target(request: http.Request) -> None:
+    """
+    Ensure request line uses origin-form (path + query) and Host header is present.
+    This makes exported requests look like typical client requests instead of proxy absolute-form.
+    """
+    # If we have an authority (HTTP/2 :authority or absolute-form host),
+    # turn it into a Host header and clear authority so first line becomes origin-form.
+    if request.data.authority:
+        if not request.headers.get("host"):
+            try:
+                request.headers["host"] = request.data.authority.decode(
+                    "utf-8", "surrogateescape"
+                )
+            except Exception:
+                pass
+        request.authority = b""
+
+    path = request.path
+    # Normalize type for parsing
+    if isinstance(path, bytes):
+        path_bytes = path
+        path_str = path.decode("latin-1", errors="ignore")
+    else:
+        path_str = path
+        path_bytes = path.encode("latin-1", errors="ignore")
+
+    # If path already origin-form, do nothing.
+    if (isinstance(path, bytes) and (path.startswith(b"/") or path == b"*")) or (
+        isinstance(path, str) and (path.startswith("/") or path == "*")
+    ):
+        pass
+    else:
+        # Convert absolute-form to origin-form.
+        try:
+            scheme, host, port, path = http_url.parse(path_bytes)
+            # keep bytes to satisfy assemble_request expectations
+            request.path = path
+            host_header = request.headers.get("host")
+            if not host_header:
+                host_str = host.decode(errors="ignore")
+                if port and port not in (80, 443):
+                    host_str = f"{host_str}:{port}"
+                request.headers["host"] = host_str
+            # ensure first_line_format becomes relative
+            request.data.authority = b""
+        except Exception:
+            pass
 
 
 def pop_headers(request: http.Request) -> None:
@@ -118,6 +169,34 @@ def httpie_command(f: flow.Flow) -> str:
     return cmd
 
 
+def python_requests_command(f: flow.Flow) -> str:
+    request = cleanup_request(f)
+    pop_headers(request)
+
+    url = request.pretty_url
+    headers_dict = {k: v for k, v in request.headers.items(multi=True)}
+    content = request.raw_content or b""
+
+    lines: list[str] = ["import requests", "", f"url = {url!r}"]
+
+    if headers_dict:
+        lines.append(f"headers = {headers_dict!r}")
+
+    if content:
+        lines.append(f"data = {content!r}")
+
+    lines.append("")
+
+    args = [f"{request.method!r}", "url"]
+    if headers_dict:
+        args.append("headers=headers")
+    if content:
+        args.append("data=data")
+    lines.append(f"response = requests.request({', '.join(args)})")
+
+    return "\n".join(lines)
+
+
 def raw_request(f: flow.Flow) -> bytes:
     request = cleanup_request(f)
     if request.raw_content is None:
@@ -159,6 +238,7 @@ def raw(f: flow.Flow, separator=b"\r\n\r\n") -> bytes:
 formats: dict[str, Callable[[flow.Flow], str | bytes]] = dict(
     curl=curl_command,
     httpie=httpie_command,
+    python_requests=python_requests_command,
     raw=raw,
     raw_request=raw_request,
     raw_response=raw_response,

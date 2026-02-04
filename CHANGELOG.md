@@ -5,6 +5,14 @@
 ✨ You do not need to add a pull request reference or author information, this will be done automatically by CI. ✨
 -->
 
+## Customized: Improved mitmweb burp-suite like
+- Add Repeater tab
+- Add Copy raw web request
+- Add Copy as python request
+- Add scope (hostname) filter: Experimental!
+
+
+
 ## Unreleased: mitmproxy next
 
 - Update optmanager value parsing exceptions to include the option name

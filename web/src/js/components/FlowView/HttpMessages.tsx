@@ -14,6 +14,10 @@ import type { HTTPFlow, HTTPMessage, HTTPResponse } from "../../flow";
 import * as flowActions from "../../ducks/flows";
 import KeyValueListEditor from "../editors/KeyValueListEditor";
 import HttpMessage from "../contentviews/HttpMessage";
+import Button from "../common/Button";
+import { copy } from "../../flow/export";
+import ContextMenu from "../common/ContextMenu";
+import { sendToRepeater } from "../../ducks/ui/repeater";
 
 type RequestLineProps = {
     flow: HTTPFlow;
@@ -173,14 +177,66 @@ const Message = React.memo(function Message({
 }) {
     const part = flow.request === message ? "request" : "response";
     const FirstLine = flow.request === message ? RequestLine : ResponseLine;
+    const dispatch = useAppDispatch();
+    const [menuPos, setMenuPos] = React.useState<{ x: number; y: number }>();
+
+    const menuItems = [
+        {
+            label:
+                flow.request === message
+                    ? "Copy raw request"
+                    : "Copy raw response",
+            onClick: () =>
+                copy(
+                    flow,
+                    flow.request === message ? "raw_request" : "raw_response",
+                ),
+        },
+        ...(flow.request === message
+            ? [
+                  {
+                      label: "Copy as Python requests",
+                      onClick: () => copy(flow, "python_requests"),
+                  },
+              ]
+            : []),
+        {
+            label: "Send to Repeater",
+            onClick: () => {
+                console.log("[FlowView] send to repeater", flow.id);
+                return dispatch(sendToRepeater(flow));
+            },
+        },
+    ];
 
     return (
-        <section className={part}>
+        <section
+            className={part}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                console.log("[FlowView] contextmenu", {
+                    x: e.clientX,
+                    y: e.clientY,
+                    flow: flow.id,
+                    part,
+                });
+                setMenuPos({ x: e.clientX, y: e.clientY });
+            }}
+        >
             <FirstLine flow={flow} />
+            <RawActions flow={flow} message={message} />
             <Headers flow={flow} message={message} />
             <hr />
             <HttpMessage key={flow.id + part} flow={flow} message={message} />
             <Trailers flow={flow} message={message} />
+            {menuPos && (
+                <ContextMenu
+                    x={menuPos.x}
+                    y={menuPos.y}
+                    items={menuItems}
+                    onClose={() => setMenuPos(undefined)}
+                />
+            )}
         </section>
     );
 });
@@ -198,3 +254,55 @@ export function Response() {
     return <Message flow={flow} message={flow.response} />;
 }
 Response.displayName = "Response";
+
+function RawActions({
+    flow,
+    message,
+}: {
+    flow: HTTPFlow;
+    message: HTTPMessage;
+}) {
+    const isRequest = flow.request === message;
+    const dispatch = useAppDispatch();
+    return (
+        <div className="first-line-actions">
+            <Button
+                className="btn-xs"
+                icon="fa-clipboard"
+                onClick={() =>
+                    copy(flow, isRequest ? "raw_request" : "raw_response").catch(
+                        (err) => {
+                            console.error(err);
+                            alert(err);
+                        },
+                    )
+                }
+            >
+                {isRequest ? "Copy raw request" : "Copy raw response"}
+            </Button>
+            {isRequest && (
+                <>
+                    <Button
+                        className="btn-xs"
+                        icon="fa-code"
+                        onClick={() =>
+                            copy(flow, "python_requests").catch((err) => {
+                                console.error(err);
+                                alert(err);
+                            })
+                        }
+                    >
+                        Copy as Python requests
+                    </Button>
+                    <Button
+                        className="btn-xs"
+                        icon="fa-repeat text-primary"
+                        onClick={() => dispatch(sendToRepeater(flow))}
+                    >
+                        Send to Repeater
+                    </Button>
+                </>
+            )}
+        </div>
+    );
+}

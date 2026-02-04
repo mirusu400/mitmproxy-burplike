@@ -2,6 +2,7 @@ import { copyToClipboard, runCommand } from "../utils";
 import type { Flow } from "../flow";
 
 export const copy = async (flow: Flow, format: string): Promise<void> => {
+    console.log("[export.copy] flow", flow.id, "format", format);
     // Safari: We need to call copyToClipboard _right away_ with a promise,
     // otherwise we're loosing user intent and can't copy anymore.
     const formatted = (async () => {
@@ -9,6 +10,7 @@ export const copy = async (flow: Flow, format: string): Promise<void> => {
         if (ret.value) {
             return ret.value;
         } else if (ret.error) {
+            console.error("[export.copy] error", ret.error);
             throw ret.error;
         } else {
             throw ret;

@@ -6,6 +6,7 @@ export enum Tab {
     FlowList,
     Options,
     Flow,
+    Repeater,
 }
 
 const tabsSlice = createSlice({

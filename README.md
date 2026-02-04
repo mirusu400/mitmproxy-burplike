@@ -1,4 +1,6 @@
-# mitmproxy
+# mitmproxy-custom
+
+* I add burp-suite like functions for pentesting, you can find changes in [Changelog](./CHANGELOG.md)
 
 [![Continuous Integration Status](https://github.com/mitmproxy/mitmproxy/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/mitmproxy/mitmproxy/actions?query=branch%3Amain)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/a38b0325dfb944839c0c8da354f70b1b)](https://app.codacy.com/gh/mitmproxy/mitmproxy/dashboard)

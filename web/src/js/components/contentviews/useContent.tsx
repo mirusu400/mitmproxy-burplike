@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import { fetchApi } from "../../utils";
 
-export function useContent(url: string, hash?: string): string | undefined {
+export function useContent(
+    url: string | undefined,
+    hash?: string,
+): string | undefined {
     const [content, setContent] = useState<string>();
     const [abort, setAbort] = useState<AbortController>();
 
     useEffect(() => {
+        if (!url) {
+            setContent(undefined);
+            return;
+        }
+
         if (abort) {
             abort.abort();
         }

@@ -217,6 +217,39 @@ class TestExportHttpieCommand:
         assert export.httpie_command(get_request) == result
 
 
+class TestExportPythonRequestsCommand:
+    def test_get(self, get_request):
+        result = "\n".join(
+            [
+                "import requests",
+                "",
+                "url = 'http://address:22/path?a=foo&a=bar&b=baz'",
+                "headers = {'header': 'qvalue'}",
+                "",
+                "response = requests.request('GET', url, headers=headers)",
+            ]
+        )
+        assert export.python_requests_command(get_request) == result
+
+    def test_post(self, patch_request):
+        result = "\n".join(
+            [
+                "import requests",
+                "",
+                "url = 'http://address:22/path?query=param'",
+                "headers = {'header': 'qvalue'}",
+                "data = b'content'",
+                "",
+                "response = requests.request('PATCH', url, headers=headers, data=data)",
+            ]
+        )
+        assert export.python_requests_command(patch_request) == result
+
+    def test_tcp(self, tcp_flow):
+        with pytest.raises(exceptions.CommandError):
+            export.python_requests_command(tcp_flow)
+
+
 class TestRaw:
     def test_req_and_resp_present(self, get_flow):
         assert b"header: qvalue" in export.raw(get_flow)
@@ -305,7 +338,14 @@ def test_export(tmp_path) -> None:
     with taddons.context() as tctx:
         tctx.configure(e)
 
-        assert e.formats() == ["curl", "httpie", "raw", "raw_request", "raw_response"]
+        assert e.formats() == [
+            "curl",
+            "httpie",
+            "python_requests",
+            "raw",
+            "raw_request",
+            "raw_response",
+        ]
         with pytest.raises(exceptions.CommandError):
             e.file("nonexistent", tflow.tflow(resp=True), f)
 

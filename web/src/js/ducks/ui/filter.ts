@@ -4,11 +4,13 @@ import { createSlice } from "@reduxjs/toolkit";
 export enum FilterName {
     Search = "search",
     Highlight = "highlight",
+    Hostname = "hostname",
 }
 
 export const initialState: Record<FilterName, string> = {
     [FilterName.Search]: "",
     [FilterName.Highlight]: "",
+    [FilterName.Hostname]: "",
 };
 
 const filtersSlice = createSlice({
@@ -21,9 +23,12 @@ const filtersSlice = createSlice({
         setHighlight(state, action: PayloadAction<string>) {
             state[FilterName.Highlight] = action.payload;
         },
+        setHostname(state, action: PayloadAction<string>) {
+            state[FilterName.Hostname] = action.payload;
+        },
     },
 });
 
 const { actions, reducer } = filtersSlice;
-export const { setFilter, setHighlight } = actions;
+export const { setFilter, setHighlight, setHostname } = actions;
 export default reducer;
