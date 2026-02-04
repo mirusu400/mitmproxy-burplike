@@ -1,6 +1,6 @@
 # mitmproxy-custom
 
-* I add burp-suite like functions for pentesting, you can find changes in [Changelog](./CHANGELOG.md)
+
 
 [![Continuous Integration Status](https://github.com/mitmproxy/mitmproxy/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/mitmproxy/mitmproxy/actions?query=branch%3Amain)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/a38b0325dfb944839c0c8da354f70b1b)](https://app.codacy.com/gh/mitmproxy/mitmproxy/dashboard)
@@ -8,6 +8,16 @@
 [![Coverage Status](https://shields.mitmproxy.org/codecov/c/github/mitmproxy/mitmproxy/main.svg?label=codecov)](https://codecov.io/gh/mitmproxy/mitmproxy)
 [![Latest Version](https://shields.mitmproxy.org/pypi/v/mitmproxy.svg)](https://pypi.python.org/pypi/mitmproxy)
 [![Supported Python versions](https://shields.mitmproxy.org/pypi/pyversions/mitmproxy.svg)](https://pypi.python.org/pypi/mitmproxy)
+
+* I add burp-suite like functions for pentesting, you can find changes in [Changelog](./CHANGELOG.md)
+
+* Simply you can install like:
+```
+git clone https://github.com/mirusu400/mitmproxy-burplike
+cd mitmproxy-burplike
+uv run mitmproxy --version # You should show 13.0.0.dev-custom
+uv run mitmweb
+```
 
 ``mitmproxy`` is an interactive, SSL/TLS-capable intercepting proxy with a console
 interface for HTTP/1, HTTP/2, and WebSockets.
