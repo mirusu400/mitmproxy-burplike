@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 
-VERSION = "13.0.0.dev-custom"
+VERSION = "13.0.0.dev0+custom"
 MITMPROXY = "mitmproxy " + VERSION
 
 # Serialization format version. This is displayed nowhere, it just needs to be incremented by one
