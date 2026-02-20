@@ -186,9 +186,11 @@ def flow_to_json(flow: mitmproxy.flow.Flow) -> dict:
                         len(x.content) for x in flow.websocket.messages
                     ),
                     "count": len(flow.websocket.messages),
-                    "timestamp_last": flow.websocket.messages[-1].timestamp
-                    if flow.websocket.messages
-                    else None,
+                    "timestamp_last": (
+                        flow.websocket.messages[-1].timestamp
+                        if flow.websocket.messages
+                        else None
+                    ),
                 },
                 "closed_by_client": flow.websocket.closed_by_client,
                 "close_code": flow.websocket.close_code,
@@ -767,9 +769,9 @@ class Commands(RequestHandler):
                     }
                     for param in cmd.parameters
                 ],
-                "return_type": command.typename(cmd.return_type)
-                if cmd.return_type
-                else None,
+                "return_type": (
+                    command.typename(cmd.return_type) if cmd.return_type else None
+                ),
                 "signature_help": cmd.signature_help(),
             }
         self.write(commands)
@@ -924,7 +926,7 @@ class Application(tornado.web.Application):
             handlers=handlers,  # type: ignore  # https://github.com/tornadoweb/tornado/pull/3455
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
-            xsrf_cookies=True,
+            xsrf_cookies=False,
             xsrf_cookie_kwargs=dict(samesite="Strict"),
             cookie_secret=secrets.token_bytes(32),
             debug=debug,
