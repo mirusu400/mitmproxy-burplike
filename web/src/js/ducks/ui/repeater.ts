@@ -47,8 +47,8 @@ export const { addEntry, removeEntry, selectEntry, clearEntries } = actions;
 
 export function sendToRepeater(flow: Flow): AppThunk {
     return async (dispatch) => {
-        if (flow.type !== "http") {
-            alert("Repeater는 HTTP 요청만 지원합니다.");
+        if (flow.type !== "http" && flow.type !== "tcp") {
+            alert("Repeater는 HTTP/TCP 요청만 지원합니다.");
             return;
         }
         try {

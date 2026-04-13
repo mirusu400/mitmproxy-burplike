@@ -27,6 +27,7 @@ export interface HTTPFlow extends _Flow {
 export interface TCPFlow extends _Flow {
     type: "tcp";
     messages_meta: MessagesMeta;
+    client_payload_b64?: string;
 }
 
 export interface UDPFlow extends _Flow {

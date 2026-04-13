@@ -11,13 +11,70 @@
 
 * I add burp-suite like functions for pentesting, you can find changes in [Changelog](./CHANGELOG.md)
 
-* Simply you can install like:
-```
+## 빠른 시작 (Quick Start)
+
+### 전제 조건 (Prerequisites)
+
+| 도구 | 용도 | 설치 |
+|------|------|------|
+| [uv](https://docs.astral.sh/uv/) | Python 패키지/런타임 관리 | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| [Node.js + npm](https://nodejs.org/) | 프론트엔드 빌드 (개발 시만 필요) | https://nodejs.org |
+
+> **참고**: 단순 실행만 할 경우 Node.js는 필요 없습니다. 빌드된 정적 파일이 저장소에 포함되어 있습니다.
+
+### 처음 설치 및 실행
+
+```bash
 git clone https://github.com/mirusu400/mitmproxy-burplike
 cd mitmproxy-burplike
-uv run mitmproxy --version # You should show 13.0.0.dev-custom
+
+# Python 환경은 uv가 자동으로 구성합니다 (venv 생성, 의존성 설치 포함)
+uv run mitmproxy --version  # 13.0.0.dev-custom 이 나와야 합니다
+
+# mitmweb 실행
 uv run mitmweb
 ```
+
+브라우저에서 `http://127.0.0.1:8081` 접속.
+
+### 프론트엔드 소스 수정 후 (개발자용)
+
+TypeScript/CSS 파일을 수정한 경우에는 반드시 빌드 후 재시작해야 합니다.
+
+```bash
+# 프론트엔드 의존성 설치 (최초 1회)
+cd web && npm install && cd ..
+
+# 프론트엔드 빌드 (소스 수정 시마다)
+cd web && npm run ci-build-release && cd ..
+
+# 브라우저 Hard Refresh (Cmd+Shift+R / Ctrl+Shift+R)
+uv run mitmweb
+```
+
+## TCP Stream Data 직접 전송 기능
+
+TCP flow의 **Stream Data** 탭에서 캡처된 payload를 바로 편집·재전송할 수 있습니다.
+
+### 사용 예시 (SOCKS5 + TCP echo)
+
+```bash
+# 터미널 1: echo 서버 실행
+uv run python examples/contrib/tcp_echo.py server --listen-host 127.0.0.1 --port 9000
+
+# 터미널 2: mitmweb SOCKS5 모드로 실행
+uv run mitmweb --mode socks5@127.0.0.1:1080 --tcp-hosts '.*'
+
+# 터미널 3: SOCKS5 프록시를 통해 echo 클라이언트 실행
+uv run python examples/contrib/tcp_echo.py client 127.0.0.1 9000 \
+    --socks5 127.0.0.1:1080 --message hello
+```
+
+mitmweb(`http://127.0.0.1:8081`)에서 캡처된 TCP flow를 클릭하면:
+
+- **Stream Data 탭** → 하단 **Send 패널**: 캡처된 payload가 hex로 표시됨.
+  내용을 수정하고 **Send** 버튼을 누르면 서버로 직접 재전송하고 응답을 인라인으로 확인.
+- **Repeater 탭**: Flow table에서 우클릭 → "Send to Repeater" 로 보내 반복 테스트 가능.
 
 ``mitmproxy`` is an interactive, SSL/TLS-capable intercepting proxy with a console
 interface for HTTP/1, HTTP/2, and WebSockets.

@@ -182,6 +182,7 @@ export function TTCPFlow(): Required<TCPFlow> {
             "tls_established": true,
             "tls_version": "TLSv1.2"
         },
+        "client_payload_b64": "aGVsbG8=",
         "comment": "",
         "error": {
             "msg": "error",

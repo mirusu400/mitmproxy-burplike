@@ -68,8 +68,12 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
         f2.request.content = None
         f2.response.content = None
         f2.id = "43"
+        f3 = tflow.ttcpflow()
+        f3.id = "44"
+        f3.live = False
         m.view.add([f, f2])
         m.view.add([tflow.tflow(err=True)])
+        m.view.add([f3])
         m.events._add_log(log.LogEntry("test log", "info"))
         m.events.done()
         self.master = m
@@ -626,3 +630,113 @@ class TestApp(tornado.testing.AsyncHTTPTestCase):
             assert self._app.settings["auth_cookie_name"]().endswith(str(new_port))
         finally:
             opts.web_port = old_port
+
+    # --- TCP Repeater tests ---
+
+    def test_tcp_flow_has_client_payload_b64(self):
+        import base64
+
+        resp = self.fetch("/flows")
+        assert resp.code == 200
+        flows = get_json(resp)
+        tcp = next((f for f in flows if f["id"] == "44"), None)
+        assert tcp is not None, "TCP flow 44 not found in /flows response"
+        assert "client_payload_b64" in tcp
+        # ttcpflow has TCPMessage(True, b"hello") as the first (from_client) message
+        assert base64.b64decode(tcp["client_payload_b64"]) == b"hello"
+
+    def test_tcp_payload_put(self):
+        import base64
+        from mitmproxy.tcp import TCPMessage
+
+        new_payload = b"updated payload"
+        b64 = base64.b64encode(new_payload).decode("ascii")
+        resp = self.put_json("/flows/44", {"tcp_payload": b64})
+        assert resp.code == 200
+        f = self.view.get_by_id("44")
+        assert len(f.messages) == 1
+        assert f.messages[0].from_client is True
+        assert f.messages[0].content == new_payload
+        # Restore original messages so other tests are not affected
+        f.messages = [
+            TCPMessage(True, b"hello", 946681204.2),
+            TCPMessage(False, b"it's me", 946681204.5),
+        ]
+
+    def test_tcp_payload_put_invalid_b64(self):
+        resp = self.put_json("/flows/44", {"tcp_payload": "!!!not base64!!!"})
+        assert resp.code == 400
+
+    def test_tcp_replay(self):
+        import base64
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=[b"echo response", b""])
+        writer = MagicMock()
+        writer.drain = AsyncMock(return_value=None)
+        writer.write_eof = MagicMock(return_value=None)
+        writer.close = MagicMock(return_value=None)
+        writer.wait_closed = AsyncMock(return_value=None)
+
+        with patch(
+            "asyncio.open_connection",
+            new=AsyncMock(return_value=(reader, writer)),
+        ):
+            resp = self.fetch("/flows/44/tcp_replay", method="POST")
+
+        assert resp.code == 200
+        data = get_json(resp)
+        assert "response_b64" in data
+        assert base64.b64decode(data["response_b64"]) == b"echo response"
+
+    def test_tcp_replay_on_http_flow_returns_400(self):
+        resp = self.fetch("/flows/42/tcp_replay", method="POST")
+        assert resp.code == 400
+
+    def test_tcp_replay_connection_refused(self):
+        with mock.patch(
+            "asyncio.open_connection",
+            side_effect=OSError("Connection refused"),
+        ):
+            resp = self.fetch("/flows/44/tcp_replay", method="POST")
+        assert resp.code == 503
+
+    def test_tcp_replay_raw(self):
+        import base64
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        reader = AsyncMock()
+        reader.read = AsyncMock(side_effect=[b"raw response", b""])
+        writer = MagicMock()
+        writer.drain = AsyncMock(return_value=None)
+        writer.write_eof = MagicMock(return_value=None)
+        writer.close = MagicMock(return_value=None)
+        writer.wait_closed = AsyncMock(return_value=None)
+
+        payload = b"raw payload"
+        payload_b64 = base64.b64encode(payload).decode()
+
+        with patch(
+            "asyncio.open_connection",
+            new=AsyncMock(return_value=(reader, writer)),
+        ):
+            resp = self.fetch(
+                "/tcp_replay_raw",
+                method="POST",
+                body=json.dumps({"host": "127.0.0.1", "port": 9000, "payload_b64": payload_b64}),
+                headers={"Content-Type": "application/json"},
+            )
+
+        assert resp.code == 200
+        data = get_json(resp)
+        assert base64.b64decode(data["response_b64"]) == b"raw response"
+
+    def test_tcp_replay_raw_bad_body(self):
+        resp = self.fetch(
+            "/tcp_replay_raw",
+            method="POST",
+            body=json.dumps({"host": "127.0.0.1"}),  # missing port and payload_b64
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.code == 400

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import hashlib
+import base64
 import json
 import logging
 import mimetypes
@@ -203,6 +204,10 @@ def flow_to_json(flow: mitmproxy.flow.Flow) -> dict:
             "count": len(flow.messages),
             "timestamp_last": flow.messages[-1].timestamp if flow.messages else None,
         }
+        if isinstance(flow, TCPFlow):
+            client_msgs = [m for m in flow.messages if m.from_client]
+            last_payload = client_msgs[-1].content if client_msgs else b""
+            f["client_payload_b64"] = base64.b64encode(last_payload).decode("ascii")
     elif isinstance(flow, DNSFlow):
         f["request"] = flow.request.to_json()
         if flow.response:
@@ -633,6 +638,12 @@ class FlowHandler(RequestHandler):
                     flow.marked = b
                 elif a == "comment":
                     flow.comment = b
+                elif a == "tcp_payload" and isinstance(flow, TCPFlow):
+                    try:
+                        raw = base64.b64decode(b)
+                    except Exception as exc:
+                        raise APIError(400, f"Invalid base64 for tcp_payload: {exc}")
+                    flow.messages = [TCPMessage(True, raw)]
                 else:
                     raise APIError(400, f"Unknown update {a}: {b}")
         except APIError:
@@ -658,6 +669,124 @@ class RevertFlow(RequestHandler):
 class ReplayFlow(RequestHandler):
     def post(self, flow_id):
         self.master.commands.call("replay.client", [self.flow])
+
+
+async def _tcp_send(host: str, port: int, payload: bytes) -> bytes:
+    """Open a TCP connection, send payload, read until EOF or timeout, return response bytes."""
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port), timeout=10.0
+        )
+    except asyncio.TimeoutError:
+        raise APIError(503, "Connection timed out.")
+    except OSError as e:
+        raise APIError(503, f"Connection failed: {e}")
+    chunks: list[bytes] = []
+    try:
+        writer.write(payload)
+        await writer.drain()
+        try:
+            writer.write_eof()
+        except Exception:
+            pass  # Some transports don't support half-close
+        while True:
+            try:
+                chunk = await asyncio.wait_for(reader.read(65536), timeout=10.0)
+            except asyncio.TimeoutError:
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+    except Exception as e:
+        raise APIError(503, f"Relay error: {e}")
+    finally:
+        writer.close()
+        try:
+            await asyncio.wait_for(writer.wait_closed(), timeout=2.0)
+        except Exception:
+            pass
+    return b"".join(chunks)
+
+
+class TCPReplay(RequestHandler):
+    async def post(self, flow_id):
+        flow = self.flow
+        if not isinstance(flow, TCPFlow):
+            raise APIError(400, "Not a TCP flow.")
+        if not flow.server_conn or not flow.server_conn.address:
+            raise APIError(400, "TCP flow has no server address.")
+        host = flow.server_conn.address[0]
+        port = flow.server_conn.address[1]
+        payload = b"".join(m.content for m in flow.messages if m.from_client)
+        response = await _tcp_send(host, port, payload)
+        self.write({"response_b64": base64.b64encode(response).decode("ascii")})
+
+
+class TCPReplayRaw(RequestHandler):
+    """Send arbitrary TCP payload to any host:port without touching a flow."""
+
+    async def post(self):
+        data = self.json
+        try:
+            host = str(data["host"])
+            port = int(data["port"])
+            payload = base64.b64decode(data["payload_b64"])
+        except (KeyError, ValueError, Exception) as e:
+            raise APIError(400, f"Invalid request body: {e}")
+        response = await _tcp_send(host, port, payload)
+        self.write({"response_b64": base64.b64encode(response).decode("ascii")})
+
+
+class TCPInject(RequestHandler):
+    """
+    Inject payload into an existing live TCP flow's server connection.
+    Falls back to a new connection when the flow is no longer live.
+    """
+
+    async def post(self, flow_id):
+        flow = self.flow
+        if not isinstance(flow, TCPFlow):
+            raise APIError(400, "Not a TCP flow.")
+        try:
+            payload = base64.b64decode(self.json["payload_b64"])
+        except (KeyError, Exception) as e:
+            raise APIError(400, f"Invalid request body: {e}")
+
+        if flow.live:
+            try:
+                self.master.commands.call("inject.tcp", flow, False, payload)
+            except ValueError as e:
+                raise APIError(400, str(e))
+            self.write({"mode": "injected"})
+        else:
+            # Flow is dead — open a fresh connection as fallback
+            if not flow.server_conn or not flow.server_conn.address:
+                raise APIError(400, "TCP flow has no server address and is not live.")
+            host = flow.server_conn.address[0]
+            port = flow.server_conn.address[1]
+            response = await _tcp_send(host, port, payload)
+            self.write({
+                "mode": "new_connection",
+                "response_b64": base64.b64encode(response).decode("ascii"),
+            })
+
+
+class CharsetEncode(RequestHandler):
+    """Encode a text string to bytes using the given Python charset name."""
+
+    async def post(self):
+        data = self.json
+        try:
+            text = str(data["text"])
+            charset = str(data.get("charset", "utf-8"))
+            encoded = text.encode(charset)
+        except LookupError:
+            raise APIError(400, f"Unknown charset: {data.get('charset')}")
+        except UnicodeEncodeError as e:
+            raise APIError(400, f"Encoding error: {e}")
+        except (KeyError, TypeError) as e:
+            raise APIError(400, f"Invalid request body: {e}")
+        self.write({"bytes_b64": base64.b64encode(encoded).decode("ascii")})
 
 
 class FlowContent(RequestHandler):
@@ -902,6 +1031,10 @@ handlers = [
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/kill", KillFlow),
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/duplicate", DuplicateFlow),
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/replay", ReplayFlow),
+    (r"/flows/(?P<flow_id>[0-9a-f\-]+)/tcp_replay", TCPReplay),
+    (r"/flows/(?P<flow_id>[0-9a-f\-]+)/tcp_inject", TCPInject),
+    (r"/tcp_replay_raw", TCPReplayRaw),
+    (r"/charset_encode", CharsetEncode),
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/revert", RevertFlow),
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/(?P<message>request|response|messages)/content.data", FlowContent),
     (r"/flows/(?P<flow_id>[0-9a-f\-]+)/(?P<message>request|response|messages)/content/(?P<content_view>[0-9a-zA-Z\-\_%]+)(?:\.json)?", FlowContentView),

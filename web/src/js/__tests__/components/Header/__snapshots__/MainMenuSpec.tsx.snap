@@ -36,6 +36,24 @@ exports[`MainMenu 1`] = `
             class="input-group-addon"
           >
             <i
+              class="fa fa-fw fa-globe"
+              style="color: black;"
+            />
+          </span>
+          <input
+            class="form-control"
+            placeholder="Scope (hostname)"
+            type="text"
+            value=""
+          />
+        </div>
+        <div
+          class="filter-input input-group"
+        >
+          <span
+            class="input-group-addon"
+          >
+            <i
               class="fa fa-fw fa-tag"
               style="color: rgb(0, 0, 0);"
             />
